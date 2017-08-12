@@ -18,6 +18,8 @@ namespace dotnetapp
 
         public static async Task MainAsync(string[] args)
         {
+            var rabbitmqUri = Environment.GetEnvironmentVariable("RABBITMQ_URI");
+
             using (var cts = new CancellationTokenSource())
             {
                 Action Shutdown = () =>
@@ -40,11 +42,7 @@ namespace dotnetapp
 
                 _bus = MassTransit.Bus.Factory.CreateUsingRabbitMq(cfg =>
                 {
-                    var host = cfg.Host(new Uri("rabbitmq://localhost"), h =>
-                    {
-                        h.Username("guest");
-                        h.Password("guest");
-                    });
+                    var host = cfg.Host(new Uri(rabbitmqUri), h => {});
 
                     cfg.ReceiveEndpoint(host, "my_queue", endpoint =>
                     {
@@ -55,11 +53,17 @@ namespace dotnetapp
                     });
                 });
 
-                await Console.Out.WriteLineAsync("Application is starting up...");
+                await Console.Out.WriteLineAsync("Application is starting...");
+                await Console.Out.WriteLineAsync($"Connecting to {rabbitmqUri}");
+
                 await _bus.StartAsync(cts.Token);
                 _done.Set();
 
-                await _bus.Publish(new MyMessage { Value = "Hello, World" }, cts.Token);
+                while(!cts.IsCancellationRequested)
+                {
+                    await _bus.Publish(new MyMessage { Value = $"Hello, World [{DateTime.Now}]" }, cts.Token);
+                    await Task.Delay(5000);
+                }
             }
         }
     }
